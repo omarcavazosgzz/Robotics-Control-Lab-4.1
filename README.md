@@ -2,7 +2,7 @@
 
 **OS:** Ubuntu 24.04
 **ROS 2:** Jazzy
-**Simulators:** MuJoCo + Gazebo
+**Simulators:** MuJoCo + Gazebo (Sim in our case)
 **Goal:** Tune P / PD / PI / PID under disturbances in MuJoCo, then replay the same commanded trajectory in Gazebo and compare behavior.
 
 ---
@@ -227,9 +227,88 @@ Conventions used here:
 * internal control + CSV export: **radians**
 
 ---
+#### Gazebo 
 
-## 12) Credits / notes
+## 12) Setup for all terminals 
+# Make sure conda isn't overriding Python/ROS stuff
+
+```bash
+conda deactivate  # if you were in (base)
+
+source /opt/ros/jazzy/setup.bash
+source ~/gazebo_ws/install/setup.bash
+
+export ROS_DOMAIN_ID=0
+export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+```
+
+Terminal 1 — Launch Gazebo + SO101
+```bash
+ros2 launch lerobot_description so101_gazebo.launch.py
+```
+
+This should open Gazebo Sim and spawn the so101 model.
+```bash
+minal 2 — Spawn controllers (run once per Gazebo launch)
+ros2 run controller_manager spawner joint_state_broadcaster -c /controller_manager
+ros2 run controller_manager spawner arm_controller          -c /controller_manager
+ros2 run controller_manager spawner gripper_controller      -c /controller_manager
+```
+
+
+Verify:
+
+```bash
+ros2 control list_controllers -c /controller_manager
+ros2 topic echo /joint_states --once
+```
+
+Note: If you run the spawners again, you’ll see errors like “controller already loaded / cannot configure from active state”. That’s normal — it just means they’re already running. To reset cleanly, restart the Gazebo launch and spawn again.
+
+
+Terminal 3 — Replay a trajectory from CSV
+```bash
+python3 ~/replay_csv_to_gazebo.py --csv ~/Downloads/PID.csv
+```
+
+Expected output:
+
+“Goals accepted”
+“Goal successfully reached!”
+
+Terminal 4 — Record data (rosbag)
+
+Record /joint_states + /clock while replaying:
+```bash
+mkdir -p ~/bags && cd ~/bags
+ros2 bag record --topics /joint_states /clock
+```
+Stop with Ctrl+C.
+
+Check the bag:
+```bash
+ros2 bag info <bag_folder_name>
+# example:
+# ros2 bag info rosbag2_2026_02_17-17_42_54
+```
+---
+
+Common issues
+
+Controllers not moving, but actions “succeed.”
+Usually, it means the controllers weren’t spawned/connected. Re-check:
+
+```bash
+ros2 control list_controllers -c /controller_manager
+```
+
+The robot is tiny/hard to see
+In Gazebo, select so101 in the Entity Tree and press F (frame/zoom to it).
+
+## 13) Credits/notes
 
 This repository is for the activity:
 **“PID Tuning and Cross-Simulator Validation for the SO101 Robot Arm”**
 (Controller tuning under perturbations + transfer to Gazebo.)
+
+``````
